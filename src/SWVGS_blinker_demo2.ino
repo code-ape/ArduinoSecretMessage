@@ -10,7 +10,7 @@
 // to your device.                  //
 //####//####//####//####//####//####//
 
-char *string = "I love you baby monkey.";
+char *string = "Hi";
 
 //####//####//####//####//####//####//
 
@@ -81,11 +81,17 @@ void loop()  {
         if (stringCount >= stringLength) {  //this checks to see if you are at the end of the string
           digitalWrite(led0, HIGH);         //if you are at the end, turn led0 on
           digitalWrite(led1, HIGH);         //if you are at the end, turn led1 on
+          digitalWrite(led2, HIGH);         //if you are at the end, turn led2 on
+          digitalWrite(led3, HIGH);         //if you are at the end, turn led3 on
+          digitalWrite(led4, HIGH);         //if you are at the end, turn led4 on
           delay(led0del);                   //pause to give time before resetting the sentance
           string = string2;                 //reset the string to its original value
           stringCount = 0;                  //reset the string counter
           digitalWrite(led0, LOW);          //turn off led0 and start over.
-          digitalWrite(led1, LOW);         //if you are at the end, turn led0 on
+          digitalWrite(led1, LOW);         //if you are at the end, turn led1 off
+          digitalWrite(led2, LOW);         //if you are at the end, turn led2 off
+          digitalWrite(led3, LOW);         //if you are at the end, turn led3 off
+          digitalWrite(led4, LOW);         //if you are at the end, turn led4 off
         }
       }
 
@@ -100,6 +106,3 @@ void loop()  {
   }
 
 }
-
-
-
