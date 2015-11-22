@@ -10,7 +10,7 @@
 // to your device.                  //
 //####//####//####//####//####//####//
 
-char secret_string[ ] = "This is my message";     //initialize
+char secret_string[ ] = "I love you baby monkey.";     //initialize
 
 //####//####//####//####//####//####//
 
@@ -23,13 +23,15 @@ const int led4 = 4; // end of message
 
 // LED role assignments
 const int LED_FADE = led0;
-const int LED_MESSAGE = led1;
-const int LED_BLINK = led2;
-const int LED_END_LETTER = led3;
-const int LED_END_MESSAGE = led4;
+const int LED_FADE2 = led1;
+const int LED_MESSAGE = led2;
+const int LED_BLINK = led3;
+const int LED_END_LETTER = led4;
+const int LED_END_MESSAGE = led1;
 
 // LED times to stay on
 const int DELAY_BLINK = 1000;
+const int LETTER_TIME = 1000;
 const int DELAY_END_LETTER = 3000;
 const int DELAY_END_MESSAGE = 5000;
 
@@ -38,14 +40,10 @@ int stringLength = sizeof(secret_string);
 int stringPosition = 0;
 int binaryPosition = 7;
 
-// register used to leave lights on for desired duration
-// if duration is 0 then it is considered to be off.
-typedef struct {
-  unsigned long start_time;
-  int duration;
-} LED_State;
+// state variable
+int state = 0;
 
-LED_State led_time_register[5];
+unsigned long led_time_register[5];
 
 //state definitions
 const int STARTING_MESSAGE = 1;
@@ -56,12 +54,10 @@ const int INBETWEEN_LETTERS = 5;
 const int END_OF_MESSAGE = 6;
 const int INBETWEEN_MESSAGE = 7;
 
-// state variable
-int state;
-
 // time variables
 int cycle_delay = 5; //milliseconds
-int prior_loop_time = 0; //milliseconds
+unsigned long prior_loop_time = 0; //milliseconds
+unsigned long TIME;
 unsigned long loop_start;
 unsigned long loop_end;
 unsigned long letter_end_time;
@@ -76,7 +72,9 @@ const boolean OFF = false;
 
 //setup
 void setup()  {
-  Serial.println("Beginning setup");
+  TIME = millis();
+  //  Serial.begin(9600);
+  //  Serial.println("Beginning setup");
   pinMode(led0, OUTPUT);
   pinMode(led1, OUTPUT);
   pinMode(led2, OUTPUT);
@@ -84,12 +82,12 @@ void setup()  {
   pinMode(led4, OUTPUT);
 
   for (int i = 0; i < 5; i++ ) {
-    led_time_register[i] = (LED_State) {0,0};
+    led_time_register[i] = 0;
   }
 
   state = STARTING_MESSAGE;
 
-  Serial.println("Exiting setup");
+  //  Serial.println("Exiting setup");
 }
 
 
@@ -99,26 +97,32 @@ boolean bit;
 // main loop
 void loop() {
 
-  unsigned long prior_loop_time = loop_end - loop_start;
+  prior_loop_time = loop_end - loop_start;
+  loop_start = millis();
 
   if (prior_loop_time < 5) {
     delay(5 - prior_loop_time);
   }
 
-  loop_start = millis();
+  TIME += prior_loop_time;
+
 
   // turns blinking light on and off
   if (time_has_passed_since(DELAY_BLINK, last_blink)) {
-    if (blink_state == ON) {
-      Serial.println("Turning blinking light off");
-      digitalWrite(LED_BLINK, LOW);
-      blink_state = OFF;
-    } else {
-      Serial.println("Turning blinking light on");
-      digitalWrite(LED_BLINK, HIGH);
-      blink_state = ON;
-    }
-    last_blink = millis();
+    turn_led_to_for_dur(LED_BLINK, DELAY_BLINK/2, ON);
+    last_blink = TIME;
+  }
+
+  int fade_val = 127.5 + 127.5 * sin(2 * PI / 2500 * TIME);
+  analogWrite(LED_FADE, fade_val);    //tell LED what its PWM fade value should be.
+  
+  if (state != INBETWEEN_MESSAGE) {
+    int fade_val = 127.5 + 127.5 * sin(2 * PI / 2500 * TIME);
+    analogWrite(LED_FADE, fade_val);
+    analogWrite(LED_FADE2, 255-fade_val);    //tell LED what its PWM fade value should be.
+  } else {
+    digitalWrite(LED_FADE2, HIGH);
+    digitalWrite(LED_FADE, HIGH);
   }
 
   turn_off_expired_leds();
@@ -130,7 +134,7 @@ void loop() {
         message_end_time = 0;
         stringPosition = 0;
 
-        Serial.println("Changing state to 'STARTING_LETTER'");
+        // Serial.println("Changing state to 'STARTING_LETTER'");
         state = STARTING_LETTER;
       }
       break;
@@ -140,21 +144,26 @@ void loop() {
       {
         binaryPosition = 7;
 
-        Serial.println("Changing state to 'PRINTING_LETTER'");
+        // Serial.println("Changing state to 'PRINTING_LETTER'");
         state = PRINTING_LETTER;
       }
       break;
 
     case PRINTING_LETTER:
       {
+        if (!time_has_passed_since(LETTER_TIME, letter_end_time)) {
+          break;
+        }
+
         letter = get_letter(secret_string, stringPosition);
         bit = get_bit(letter, binaryPosition);
         print_bit(bit);
 
-        binaryPosition -= 1;
+        binaryPosition--;
+        letter_end_time = last_blink;
 
         if (binaryPosition < 0) {
-          Serial.println("Changing state to 'END_OF_LETTER'");
+          // Serial.println("Changing state to 'END_OF_LETTER'");
           state = END_OF_LETTER;
         }
       }
@@ -162,18 +171,22 @@ void loop() {
 
     case END_OF_LETTER:
       {
+        if (!time_has_passed_since(LETTER_TIME, letter_end_time)) {
+          break;
+        }
+        print_bit(OFF);
         turn_led_on_for_dur(LED_END_LETTER, DELAY_END_LETTER);
 
         stringPosition += 1;
 
-        if (stringPosition >= stringLength) {
-          Serial.println("Changing state to 'END_OF_MESSAGE'");
+        if (stringPosition >= stringLength - 1) {
+          //          Serial.println("Changing state to 'END_OF_MESSAGE'");
           state = END_OF_MESSAGE;
-          message_end_time = millis();
+          message_end_time = TIME;
         } else {
-          Serial.println("Changing state to 'INBETWEEN_LETTERS'");
+          //          Serial.println("Changing state to 'INBETWEEN_LETTERS'");
           state = INBETWEEN_LETTERS;
-          letter_end_time = millis();
+          letter_end_time = TIME;
         }
       }
       break;
@@ -182,7 +195,7 @@ void loop() {
     case INBETWEEN_LETTERS:
       {
         if (time_has_passed_since(DELAY_END_LETTER, letter_end_time)) {
-          Serial.println("Changing state to 'STARTING_LETTER'");
+          //          Serial.println("Changing state to 'STARTING_LETTER'");
           state = STARTING_LETTER;
         }
       }
@@ -190,8 +203,12 @@ void loop() {
 
     case END_OF_MESSAGE:
       {
-        Serial.println("Changing state to 'INBETWEEN_MESSAGE'");
+        turn_led_on_for_dur(LED_END_MESSAGE, DELAY_END_MESSAGE);
+
+        //        Serial.println("Changing state to 'INBETWEEN_MESSAGE'");
+
         state = INBETWEEN_MESSAGE;
+
       }
       break;
 
@@ -199,7 +216,7 @@ void loop() {
     case INBETWEEN_MESSAGE:
       {
         if (time_has_passed_since(DELAY_END_MESSAGE, message_end_time)) {
-          Serial.println("Changing state to 'STARTING_MESSAGE'");
+          //          Serial.println("Changing state to 'STARTING_MESSAGE'");
           state = STARTING_MESSAGE;
         }
       }
@@ -216,7 +233,7 @@ char get_letter(char *char_array, int position) {
 }
 
 boolean get_bit(char letter, int position) {
-  if (letter & 1 << position){
+  if (letter & 1 << position) {
     return true;
   } else {
     return false;
@@ -225,29 +242,49 @@ boolean get_bit(char letter, int position) {
 
 void print_bit(boolean bit) {
   if (bit == ON) {
-    digitalWrite(LED_MESSAGE, HIGH);
+    //    Serial.println("Printing '1' bit");
   } else {
-    digitalWrite(LED_MESSAGE, LOW);
+    //    Serial.println("Printing '0' bit");
+  }
+
+  if (bit == ON) {
+    //digitalWrite(LED_MESSAGE, HIGH);
+    turn_led_to_for_dur(LED_MESSAGE, LETTER_TIME / 2, ON);
+  } else {
+    //digitalWrite(LED_MESSAGE, LOW);
+    turn_led_to_for_dur(LED_MESSAGE, LETTER_TIME / 2, OFF);
   }
 }
 
 
 void turn_led_on_for_dur(int led_number, int duration) {
-  Serial.print("Turning on led '");
-  Serial.print(led_number);
-  Serial.print("' for '");
-  Serial.print(duration);
-  Serial.print("' milliseconds\n");
+  //  Serial.print("Turning on led '");
+  //  Serial.print(led_number);
+  //  Serial.print("' for '");
+  //  Serial.print(duration);
+  //  Serial.print("' milliseconds\n");
+  turn_led_to_for_dur(led_number, duration, ON);
+}
 
-  digitalWrite(led_number, HIGH);
+void turn_led_to_for_dur(int led_number, int duration, boolean state) {
+  turn_led_to_for_dur_since(led_number, duration, state, TIME);
+}
 
-  led_time_register[led_number].duration = duration;
-  led_time_register[led_number].start_time = millis();
+
+void turn_led_to_for_dur_since(int led_number, int duration, boolean state, unsigned long initial_time) {
+
+  if (state == ON) {
+    digitalWrite(led_number, HIGH);
+  } else {
+    digitalWrite(led_number, LOW);
+  }
+  
+  led_time_register[led_number] = initial_time + duration;
 }
 
 
 boolean time_has_passed_since(int interval_length, unsigned long start_time) {
-  if (start_time + ((unsigned long) interval_length) < millis()) {
+  if (start_time + ((unsigned long) interval_length) < TIME) {
     return true;
   } else {
     return false;
@@ -257,19 +294,19 @@ boolean time_has_passed_since(int interval_length, unsigned long start_time) {
 
 void turn_off_expired_leds() {
   for (int pin = 0; pin < 5; pin++) {
-    float duration = (unsigned long) led_time_register[pin].duration;
 
-    if ( duration > 0 ) {
-      if ( millis() > led_time_register[pin].start_time + duration ) {
-        Serial.print("Turning off led '");
-        Serial.print(pin);
-        Serial.print("'\n");
+    if ( led_time_register[pin] > 0 ) {
+      if ( TIME > led_time_register[pin] ) {
+        //        Serial.print("Turning off led '");
+        //        Serial.print(pin);
+        //        Serial.print("'\n");
 
         digitalWrite(pin, LOW);
 
-        led_time_register[pin] = (LED_State) {0,0};
+        led_time_register[pin] = 0;
       }
     }
 
   }
 }
+
